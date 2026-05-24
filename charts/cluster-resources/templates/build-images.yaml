@@ -1,0 +1,55 @@
+{{- if .Values.buildImages.enabled }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: build-images
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    path: charts/build-images
+    repoURL: {{ .Values.argocd.repoURL | quote }}
+    targetRevision: {{ .Values.argocd.targetRevision | quote }}
+    helm:
+      values: |
+        createNamespace: false
+        imageRegistry: {{ required "buildImages.imageRegistry is required (e.g. ghcr.io/yourorg)" .Values.buildImages.imageRegistry | quote }}
+        imageTag: {{ .Values.buildImages.imageTag | quote }}
+        gitURL: {{ .Values.buildImages.gitURL | quote }}
+        gitRevision: {{ .Values.buildImages.gitRevision | quote }}
+        gitCredentialsSecretName: {{ .Values.buildImages.gitCredentialsSecretName | quote }}
+        registrySecretName: {{ .Values.buildImages.registrySecretName | quote }}
+        insecureRegistry: {{ .Values.buildImages.insecureRegistry }}
+        manifestCheckImage: {{ .Values.buildImages.manifestCheckImage | quote }}
+        gitImage: {{ .Values.buildImages.gitImage | quote }}
+        buildahImage: {{ .Values.buildImages.buildahImage | quote }}
+        buildahStorageDriver: {{ .Values.buildImages.buildahStorageDriver | quote }}
+{{- if .Values.buildImages.images }}
+        images:
+{{ toYaml .Values.buildImages.images | nindent 10 }}
+{{- else }}
+        images:
+          - name: data-warehouse-mcp
+            dockerfilePath: images/data-warehouse-mcp
+          - name: dwh-chat
+            dockerfilePath: images/dwh-chat
+          - name: flink-osquery-job
+            dockerfilePath: images/flink-osquery-job
+          - name: superset
+            dockerfilePath: images/superset
+{{- end }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: build-images
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}

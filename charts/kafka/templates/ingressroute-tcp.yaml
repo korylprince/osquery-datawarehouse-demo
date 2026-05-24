@@ -1,0 +1,17 @@
+{{- if .Values.external.enabled }}
+apiVersion: traefik.io/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: kafka
+  namespace: kafka
+spec:
+  entryPoints:
+    - kafka
+  routes:
+    - match: HostSNI(`{{ .Values.external.host }}`)
+      services:
+        - name: kafka-kafka-tls-bootstrap
+          port: 9093
+  tls:
+    passthrough: true
+{{- end }}

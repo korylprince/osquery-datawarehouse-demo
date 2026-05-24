@@ -1,0 +1,83 @@
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: flink-osquery-job
+  namespace: flink
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  image: {{ printf "%s/%s:%s" .Values.image.registry .Values.image.name .Values.image.tag | quote }}
+  imagePullPolicy: Always
+  flinkVersion: {{ .Values.flink.version | quote }}
+  serviceAccount: flink
+  flinkConfiguration:
+    taskmanager.numberOfTaskSlots: {{ .Values.flink.taskManager.taskSlots | quote }}
+    execution.checkpointing.interval: "60000"
+    taskmanager.memory.managed.size: "128m"
+    taskmanager.memory.network.min: "128m"
+    taskmanager.memory.network.max: "128m"
+    heartbeat.timeout: "180000"
+    kubernetes.jobmanager.cpu.limit-factor: {{ .Values.flink.jobManager.cpuLimitFactor | quote }}
+    kubernetes.taskmanager.cpu.limit-factor: {{ .Values.flink.taskManager.cpuLimitFactor | quote }}
+    kubernetes.taskmanager.memory.limit-factor: {{ .Values.flink.taskManager.memoryLimitFactor | quote }}
+    metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+    metrics.reporter.prom.port: "9249"
+  jobManager:
+    resource:
+      memory: {{ .Values.flink.jobManager.memory | quote }}
+      cpu: {{ .Values.flink.jobManager.cpu }}
+  taskManager:
+    resource:
+      memory: {{ .Values.flink.taskManager.memory | quote }}
+      cpu: {{ .Values.flink.taskManager.cpu }}
+  podTemplate:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9249"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: flink-main-container
+          env:
+            - name: POLARIS_URI
+              value: {{ .Values.polarisURI | quote }}
+            - name: POLARIS_WAREHOUSE
+              value: "warehouse"
+            - name: POLARIS_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.polarisCredentialsSecretName | quote }}
+                  key: client-id
+            - name: POLARIS_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.polarisCredentialsSecretName | quote }}
+                  key: client-secret
+            - name: S3_ENDPOINT
+              value: {{ .Values.garageEndpoint | quote }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.s3CredentialsSecretName | quote }}
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.s3CredentialsSecretName | quote }}
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: {{ .Values.kafkaBootstrap | quote }}
+            - name: KAFKA_TOPIC
+              value: "osquery"
+            - name: KAFKA_GROUP_ID
+              value: "flink-osquery-job-iceberg"
+            - name: ICEBERG_DATABASE
+              value: "default"
+            - name: PARSER_PARALLELISM
+              value: "2"
+  job:
+    jarURI: local:///opt/flink/lib/flink-osquery-job.jar
+    entryClass: com.github.korylprince.OsqueryJob
+    parallelism: 3
+    upgradeMode: stateless

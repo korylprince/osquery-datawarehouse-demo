@@ -1,0 +1,47 @@
+# ── SSH Access ──────────────────────────────────────────────────────────────
+# Public key to create an AWS key pair for SSHing into the cluster host.
+ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA..."
+
+# ── Cloudflare DNS ───────────────────────────────────────────────
+# Creates DNS records so the cluster is reachable via a custom domain instead
+# of a raw IP. Set both together.
+cloudflare_zone      = "example.com"
+cloudflare_api_token = "cfut_..."
+
+# ── Argo CD Git Repo Credentials (optional) ─────────────────────────────────
+# If the Git repo is private, set all three to render the repository Secret so
+# Argo CD can clone it. The URL defaults to the public demo repo.
+argocd_repo_url = "https://github.com/github-username/osquery-datawarehouse-demo.git"
+argocd_repo_username = "github-username"
+argocd_repo_password = "ghp_..."
+
+# ── Admin Password (optional) ───────────────────────────────────────────────
+# Shared admin password for basic-auth protected ingress routes.
+admin_password = "your-secure-password"
+
+# ── Instance Type ───────────────────────────────────────────────────────────
+# EC2 instance type (default: m8a.xlarge).
+# instance_type = "t3a.xlarge" # cheaper, less powerful instance type
+
+# ── DWH Chat AI Endpoints ───────────────────────────────────────────────────
+# Endpoints without apiKeyRef/apiKey use no authentication (e.g. local models).
+# Endpoints with apiKeyRef/apiKey create a K8s Secret
+# (dwh-chat-<apiKeyRef>) in the dwh-chat namespace.
+dwh_chat = {
+  endpoints = [
+    {
+      name      = "OpenAI"
+      baseUrl   = "https://api.openai.com"
+      models    = ["gpt-4o"]
+      apiKeyRef = "openai"
+      apiKey    = "sk-..."
+    },
+    {
+      name      = "OpenCode Go"
+      baseUrl   = "https://opencode.ai/zen/go"
+      models    = ["deepseek-v4-flash"]
+      apiKeyRef = "opencode"
+      apiKey    = "sk-..."
+    }
+  ]
+}

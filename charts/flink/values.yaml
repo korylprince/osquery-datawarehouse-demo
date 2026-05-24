@@ -1,0 +1,51 @@
+createNamespace: true
+operator:
+  operatorPod:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    webhook:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+
+image:
+  registry: ""
+  name: "flink-osquery-job"
+  tag: "latest"
+
+s3CredentialsSecretName: "garage-s3-credentials"
+polarisCredentialsSecretName: "polaris-root-credentials"
+
+polarisURI: "http://polaris.polaris.svc.cluster.local:8181/api/catalog"
+garageEndpoint: "http://garage.garage.svc.cluster.local:3900"
+kafkaBootstrap: "kafka-kafka-bootstrap.kafka.svc.cluster.local:9092"
+trinoEndpoint: "trino.trino.svc.cluster.local:8080"
+
+flink:
+  version: "v2_0"
+  jobManager:
+    memory: "1024m"
+    cpu: 0.5
+    cpuLimitFactor: 2.0
+  taskManager:
+    memory: "2048m"
+    cpu: 0.5
+    cpuLimitFactor: 2.0
+    memoryLimitFactor: 2.0
+    taskSlots: "2"
+
+ingress:
+  enabled: false
+  host: ""
+  className: "traefik"
+  annotations: {}
+  tlsSecretName: "ingress-tls"

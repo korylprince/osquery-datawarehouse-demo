@@ -1,0 +1,74 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: polaris
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    path: charts/polaris
+    repoURL: {{ .Values.argocd.repoURL | quote }}
+    targetRevision: {{ .Values.argocd.targetRevision | quote }}
+    helm:
+      values: |
+        createNamespace: false
+        polaris:
+          persistence:
+            relationalJdbc:
+              secret:
+                name: {{ .Values.polaris.databaseSecretName | quote }}
+          authentication:
+            tokenBroker:
+              secret:
+                name: {{ .Values.polaris.tokenKeySecretName | quote }}
+                symmetricKey:
+                  secretKey: "symmetric.key"
+          storage:
+            secret:
+              name: {{ .Values.polaris.s3CredentialsSecretName | quote }}
+              awsAccessKeyId: AWS_ACCESS_KEY_ID
+              awsSecretAccessKey: AWS_SECRET_ACCESS_KEY
+          extraEnv:
+            - name: AWS_REGION
+              value: "garage"
+            - name: AWS_REQUEST_CHECKSUM_CALCULATION
+              value: "WHEN_REQUIRED"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.polaris.s3CredentialsSecretName | quote }}
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.polaris.s3CredentialsSecretName | quote }}
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: AWS_ENDPOINT_URL_S3
+              value: {{ .Values.polaris.garageEndpoint | quote }}
+            - name: AWS_S3_FORCE_PATH_STYLE
+              value: "true"
+            - name: JAVA_OPTS
+              value: "-Xmx1g -XX:MaxMetaspaceSize=256m"
+        storage:
+          size: {{ .Values.polaris.storage.size | quote }}
+          storageClass: {{ coalesce .Values.polaris.storage.storageClass .Values.global.storageClass | quote }}
+        tokenKeySecretName: {{ .Values.polaris.tokenKeySecretName | quote }}
+        rootCredentialsSecretName: {{ .Values.polaris.rootCredentialsSecretName | quote }}
+        databaseSecretName: {{ .Values.polaris.databaseSecretName | quote }}
+        s3CredentialsSecretName: {{ .Values.polaris.s3CredentialsSecretName | quote }}
+        garageEndpoint: {{ .Values.polaris.garageEndpoint | quote }}
+        polarisHost: {{ .Values.polaris.polarisHost | quote }}
+{{ include "osquery-datawarehouse.ingressValues" (dict "root" . "host" .Values.polaris.ingress.host) | nindent 8 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: polaris
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,122 @@
+{{- if .Values.external.authentication.enabled }}
+---
+# Init job: replace Strimzi-generated CA secrets with our cert-manager CA.
+# Strimzi expects two secrets with specific names, labels, and annotations
+# when clientsCa.generateCertificateAuthority is false.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-ca-init
+  namespace: kafka
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  template:
+    spec:
+      serviceAccountName: kafka-ca-init
+      containers:
+        - name: copy-ca
+          image: bitnami/kubectl:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              CLUSTER="kafka"
+              CERT_SECRET="${CLUSTER}-clients-ca-cert"
+              KEY_SECRET="${CLUSTER}-clients-ca"
+              CERT_GEN="0"
+              KEY_GEN="0"
+
+              # Check if already done
+              if kubectl get secret "$CERT_SECRET" -n kafka -o jsonpath='{.metadata.annotations.strimzi\.io/ca-cert-generation}' 2>/dev/null | grep -q "$CERT_GEN" \
+                 && kubectl get secret "$KEY_SECRET" -n kafka -o jsonpath='{.metadata.annotations.strimzi\.io/ca-key-generation}' 2>/dev/null | grep -q "$KEY_GEN"; then
+                # Verify the cert matches our CA
+                EXISTING_HASH=$(kubectl get secret "$CERT_SECRET" -n kafka -o jsonpath='{.data.ca\.crt}' 2>/dev/null)
+                OUR_HASH=$(base64 /ca/tls.crt | tr -d '\n')
+                if [ "$EXISTING_HASH" = "$OUR_HASH" ]; then
+                  echo "CA secrets already up to date, skipping"
+                  exit 0
+                fi
+              fi
+
+              echo "Replacing Strimzi-generated CA secrets with cert-manager CA..."
+
+              # Delete existing Strimzi-generated secrets (remove owner references first)
+              kubectl patch secret "$CERT_SECRET" -n kafka --type=json -p='[{"op":"remove","path":"/metadata/ownerReferences"}]' 2>/dev/null || true
+              kubectl patch secret "$KEY_SECRET" -n kafka --type=json -p='[{"op":"remove","path":"/metadata/ownerReferences"}]' 2>/dev/null || true
+              kubectl delete secret "$CERT_SECRET" -n kafka --ignore-not-found=true
+              kubectl delete secret "$KEY_SECRET" -n kafka --ignore-not-found=true
+
+               # Create certificate secret with correct labels and annotations
+              kubectl create secret generic "$CERT_SECRET" \
+                -n kafka \
+                --from-file=ca.crt=/ca/tls.crt
+              kubectl label secret "$CERT_SECRET" -n kafka \
+                strimzi.io/kind=Kafka strimzi.io/cluster="$CLUSTER" --overwrite
+              kubectl annotate secret "$CERT_SECRET" -n kafka \
+                strimzi.io/ca-cert-generation="$CERT_GEN" --overwrite
+
+              # Create key secret with correct labels and annotations
+              kubectl create secret generic "$KEY_SECRET" \
+                -n kafka \
+                --from-file=ca.key=/ca/tls.key
+              kubectl label secret "$KEY_SECRET" -n kafka \
+                strimzi.io/kind=Kafka strimzi.io/cluster="$CLUSTER" --overwrite
+              kubectl annotate secret "$KEY_SECRET" -n kafka \
+                strimzi.io/ca-key-generation="$KEY_GEN" --overwrite
+
+              echo "Done - CA secrets updated"
+          volumeMounts:
+            - name: source-ca
+              mountPath: /ca
+              readOnly: true
+      volumes:
+        - name: source-ca
+          secret:
+            secretName: {{ .Values.external.authentication.caSecretName }}
+      restartPolicy: Never
+  backoffLimit: 3
+---
+# ServiceAccount for the init job
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kafka-ca-init
+  namespace: kafka
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+---
+# RBAC: allow the init job to manage secrets in the kafka namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kafka-ca-init
+  namespace: kafka
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "get", "delete", "patch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kafka-ca-init
+  namespace: kafka
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kafka-ca-init
+subjects:
+  - kind: ServiceAccount
+    name: kafka-ca-init
+    namespace: kafka
+{{- end }}

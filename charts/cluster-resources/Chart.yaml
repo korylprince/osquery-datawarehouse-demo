@@ -1,0 +1,5 @@
+apiVersion: v2
+name: cluster-resources
+description: App of Apps root chart for shared cluster services used by the demo
+type: application
+version: 0.1.0

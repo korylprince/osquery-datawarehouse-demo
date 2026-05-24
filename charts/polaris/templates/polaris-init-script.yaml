@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: polaris-init
+  namespace: polaris
+data:
+  polaris-init.py: |
+{{ .Files.Get "files/polaris-init.py" | nindent 4 }}

@@ -1,0 +1,84 @@
+{{- if .Values.osqueryDataWarehouse.enabled }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: osquery-datawarehouse
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    path: charts/osquery-datawarehouse
+    repoURL: {{ .Values.argocd.repoURL | quote }}
+    targetRevision: {{ .Values.argocd.targetRevision | quote }}
+    helm:
+      releaseName: osquery-datawarehouse
+      values: |
+        global:
+          imageRegistry: {{ .Values.osqueryDataWarehouse.imageRegistry | quote }}
+          imageTag: {{ .Values.osqueryDataWarehouse.imageTag | quote }}
+          storageClass: {{ .Values.osqueryDataWarehouse.storageClass | quote }}
+        argocd:
+          namespace: {{ .Values.argocd.namespace | quote }}
+          repoURL: {{ .Values.argocd.repoURL | quote }}
+          targetRevision: {{ .Values.argocd.targetRevision | quote }}
+        ingress:
+          enabled: {{ .Values.osqueryDataWarehouse.ingress.enabled }}
+          className: {{ .Values.osqueryDataWarehouse.ingress.className | quote }}
+{{- if .Values.osqueryDataWarehouse.ingress.annotations }}
+          annotations:
+{{ toYaml .Values.osqueryDataWarehouse.ingress.annotations | nindent 12 }}
+{{- else }}
+          annotations: {}
+{{- end }}
+          tlsSecretName: {{ .Values.osqueryDataWarehouse.ingress.tlsSecretName | quote }}
+        garage:
+          replicationNamespaces: {{ .Values.osqueryDataWarehouse.garage.replicationNamespaces | quote }}
+        kafka:
+          external:
+            enabled: {{ .Values.osqueryDataWarehouse.kafka.external.enabled }}
+            host: {{ .Values.osqueryDataWarehouse.kafka.external.host | quote }}
+            tlsSecretName: {{ .Values.osqueryDataWarehouse.kafka.external.tlsSecretName | quote }}
+        superset:
+          ingress:
+            host: {{ .Values.osqueryDataWarehouse.superset.ingress.host | quote }}
+        dwhChat:
+          endpoints:
+{{ toYaml .Values.osqueryDataWarehouse.dwhChat.endpoints | nindent 12 }}
+          apiKeySecrets:
+{{ toYaml .Values.osqueryDataWarehouse.dwhChat.apiKeySecrets | nindent 12 }}
+          ingress:
+            host: {{ coalesce .Values.osqueryDataWarehouse.dwhChat.ingress.host "" | quote }}
+        dataWarehouseMcp:
+          ingress:
+            host: {{ .Values.osqueryDataWarehouse.dataWarehouseMcp.ingress.host | quote }}
+        basicAuth:
+          middlewareNamespace: {{ .Values.basicAuth.secretNamespace | quote }}
+          middlewareName: {{ .Values.basicAuth.middlewareName | quote }}
+        flink:
+          ingress:
+            host: {{ coalesce .Values.osqueryDataWarehouse.flink.ingress.host "" | quote }}
+          jobManager:
+            cpu: {{ .Values.osqueryDataWarehouse.flink.jobManager.cpu }}
+            cpuLimitFactor: {{ .Values.osqueryDataWarehouse.flink.jobManager.cpuLimitFactor }}
+            memory: {{ .Values.osqueryDataWarehouse.flink.jobManager.memory | quote }}
+            memoryLimitFactor: {{ .Values.osqueryDataWarehouse.flink.jobManager.memoryLimitFactor }}
+          taskManager:
+            cpu: {{ .Values.osqueryDataWarehouse.flink.taskManager.cpu }}
+            cpuLimitFactor: {{ .Values.osqueryDataWarehouse.flink.taskManager.cpuLimitFactor }}
+            memory: {{ .Values.osqueryDataWarehouse.flink.taskManager.memory | quote }}
+            memoryLimitFactor: {{ .Values.osqueryDataWarehouse.flink.taskManager.memoryLimitFactor }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}

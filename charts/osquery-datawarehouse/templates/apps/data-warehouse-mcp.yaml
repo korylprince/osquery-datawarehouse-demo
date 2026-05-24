@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: data-warehouse-mcp
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    path: charts/data-warehouse-mcp
+    repoURL: {{ .Values.argocd.repoURL | quote }}
+    targetRevision: {{ .Values.argocd.targetRevision | quote }}
+    helm:
+      values: |
+        createNamespace: false
+        image:
+          registry: {{ required "global.imageRegistry is required (e.g. ghcr.io/yourorg)" .Values.global.imageRegistry | quote }}
+          tag: {{ .Values.global.imageTag | quote }}
+        runtimeClassName: {{ .Values.dataWarehouseMcp.runtimeClassName | quote }}
+        trinoHost: {{ .Values.dataWarehouseMcp.trinoHost | quote }}
+        trinoPort: {{ .Values.dataWarehouseMcp.trinoPort | quote }}
+        storage:
+          size: {{ .Values.dataWarehouseMcp.storage.size | quote }}
+          storageClass: {{ coalesce .Values.dataWarehouseMcp.storage.storageClass .Values.global.storageClass | quote }}
+{{- $mcpExtraAnnotations := dict -}}
+{{- if .Values.basicAuth.middlewareName -}}
+{{- $_ := set $mcpExtraAnnotations "traefik.ingress.kubernetes.io/router.middlewares" (printf "%s-%s@kubernetescrd" .Values.basicAuth.middlewareNamespace .Values.basicAuth.middlewareName) -}}
+{{- end -}}
+{{ include "osquery-datawarehouse.ingressValues" (dict "root" . "host" .Values.dataWarehouseMcp.ingress.host "extraAnnotations" $mcpExtraAnnotations) | nindent 8 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: data-warehouse-mcp
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

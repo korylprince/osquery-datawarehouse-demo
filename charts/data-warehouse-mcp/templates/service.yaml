@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-warehouse-mcp
+  namespace: data-warehouse-mcp
+  labels:
+    app: data-warehouse-mcp
+spec:
+  type: ClusterIP
+  selector:
+    app: data-warehouse-mcp
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

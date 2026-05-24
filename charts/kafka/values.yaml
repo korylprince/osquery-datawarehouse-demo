@@ -1,0 +1,26 @@
+createNamespace: true
+storage:
+  size: "100Gi"
+  storageClass: "standard"
+external:
+  enabled: false
+  host: ""
+  tlsSecretName: "ingress-tls-pkcs8"
+  authentication:
+    enabled: true
+    caSecretName: "kafka-ca"
+    issuerName: "kafka-ca-issuer"
+topic:
+  partitions: 1
+  replicas: 1
+  retentionMs: "86400000"
+kafka:
+  version: "4.2.0"
+  metadataVersion: "4.2-IV1"
+  resources:
+    requests:
+      cpu: "100m"
+      memory: 1Gi
+    limits:
+      cpu: "4"
+      memory: 2Gi

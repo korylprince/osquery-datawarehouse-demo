@@ -1,0 +1,177 @@
+%{ if argocd_repo_url != null && argocd_repo_username != null && argocd_repo_password != null ~}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: osquery-datawarehouse-demo-repo
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+type: Opaque
+stringData:
+  type: git
+  url: ${jsonencode(argocd_repo_url)}
+  username: ${jsonencode(argocd_repo_username)}
+  password: ${jsonencode(argocd_repo_password)}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: build-images
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: osquery-datawarehouse-demo-git-credentials
+  namespace: build-images
+type: Opaque
+stringData:
+  username: ${jsonencode(argocd_repo_username)}
+  password: ${jsonencode(argocd_repo_password)}
+---
+%{ endif ~}
+%{ if cloudflare_enabled ~}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cloudflare-api-token-secret
+  namespace: cert-manager
+type: Opaque
+stringData:
+  api-token: ${jsonencode(cloudflare_api_token)}
+---
+%{ endif ~}
+%{ if dwh_chat_secrets_yaml != "" ~}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dwh-chat
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+${dwh_chat_secrets_yaml}
+---
+%{ endif ~}
+%{ if admin_password != null ~}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: traefik
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: basic-auth
+  namespace: traefik
+type: kubernetes.io/basic-auth
+stringData:
+  username: admin
+  password: ${jsonencode(admin_password)}
+---
+%{ endif ~}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-resources
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: ${jsonencode(argocd_repo_url)}
+    path: charts/cluster-resources
+    helm:
+      values: |
+        argocd:
+          repoURL: ${jsonencode(argocd_repo_url)}
+        global:
+          domainPrefix: ${jsonencode(domain_prefix)}
+        certManager:
+%{ if cloudflare_enabled ~}
+          clusterIssuer:
+            acme:
+              server: "https://acme-v02.api.letsencrypt.org/directory"
+              dns01:
+                cloudflare:
+                  zone: ${jsonencode(cloudflare_zone)}
+          sharedCertificate:
+            rootDomain: ${jsonencode(cloudflare_zone)}
+            extraDnsNames:
+              - ${jsonencode(cloudflare_wildcard_zone)}
+          pkcs8Certificate:
+            rootDomain: ${jsonencode(cloudflare_zone)}
+            extraDnsNames:
+              - ${jsonencode(cloudflare_wildcard_zone)}
+%{ else ~}
+          enabled: false
+          clusterIssuer:
+            enabled: false
+          sharedCertificate:
+            enabled: false
+          pkcs8Certificate:
+            enabled: false
+%{ endif ~}
+%{ if admin_password != null ~}
+        basicAuth:
+          enabled: true
+          argoIngressHost: ${jsonencode("argo.${domain_prefix}")}
+          grafanaIngressHost: ${jsonencode("grafana.${domain_prefix}")}
+%{ endif ~}
+        osqueryDataWarehousePrereqs:
+          enabled: true
+        buildImages:
+          gitURL: ${jsonencode(argocd_repo_url)}
+%{ if argocd_repo_username != null && argocd_repo_password != null ~}
+          gitCredentialsSecretName: "osquery-datawarehouse-demo-git-credentials"
+%{ endif ~}
+        osqueryDataWarehouse:
+          enabled: true
+          dwhChat:
+${dwh_chat_helm_values_yaml}
+%{ if cloudflare_enabled ~}
+            ingress:
+              host: ${jsonencode("chat.${domain_prefix}")}
+%{ endif ~}
+%{ if cloudflare_enabled ~}
+          ingress:
+            enabled: true
+          kafka:
+            external:
+              enabled: true
+              host: ${jsonencode("kafka.${domain_prefix}")}
+          superset:
+            ingress:
+              host: ${jsonencode("superset.${domain_prefix}")}
+          dataWarehouseMcp:
+            ingress:
+              host: ${jsonencode("chat.${domain_prefix}")}
+            imageBaseURL: ${jsonencode("https://chat.${domain_prefix}")}
+%{ endif ~}
+%{ if admin_password != null ~}
+          flink:
+            ingress:
+              host: ${jsonencode("flink.${domain_prefix}")}
+%{ endif ~}
+        traefik:
+          extraEntrypoints:
+            kafka:
+              port: 9093
+              protocol: TCP
+              expose:
+                default: true
+              exposedPort: 9093
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - SkipDryRunOnMissingResource=true

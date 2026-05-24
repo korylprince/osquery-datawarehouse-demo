@@ -1,0 +1,34 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kafka
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    path: charts/kafka
+    repoURL: {{ .Values.argocd.repoURL | quote }}
+    targetRevision: {{ .Values.argocd.targetRevision | quote }}
+    helm:
+      values: |
+        createNamespace: false
+        storage:
+          size: {{ .Values.kafka.storage.size | quote }}
+          storageClass: {{ coalesce .Values.kafka.storage.storageClass .Values.global.storageClass | quote }}
+        external:
+          enabled: {{ .Values.kafka.external.enabled }}
+          host: {{ .Values.kafka.external.host | quote }}
+          tlsSecretName: {{ .Values.kafka.external.tlsSecretName | quote }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kafka
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,70 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: polaris-init
+  namespace: polaris
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: polaris-init
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: polaris-init
+          image: python:3.13-alpine
+          command:
+            - python3
+            - /scripts/polaris-init.py
+          env:
+            - name: POLARIS_HOST
+              value: {{ .Values.polarisHost | quote }}
+            - name: POLARIS_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.rootCredentialsSecretName | quote }}
+                  key: client-id
+            - name: POLARIS_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.rootCredentialsSecretName | quote }}
+                  key: client-secret
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.s3CredentialsSecretName | quote }}
+                  key: AWS_ACCESS_KEY_ID
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.s3CredentialsSecretName | quote }}
+                  key: AWS_SECRET_ACCESS_KEY
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: init-script
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: init-script
+          configMap:
+            name: polaris-init
+        - name: tmp
+          emptyDir: {}

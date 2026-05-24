@@ -1,0 +1,91 @@
+createNamespace: true
+superset:
+  runAsUser: 1000
+
+  image:
+    repository: ""
+    tag: "latest"
+    pullPolicy: Always
+
+  extraEnvRaw:
+    - name: SUPERSET_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: superset-secret-key
+          key: secret-key
+    - name: DB_PASS
+      valueFrom:
+        secretKeyRef:
+          name: superset-postgres-auth
+          key: password
+    - name: CELERY_WORKER_CONCURRENCY
+      value: "1"
+    - name: CELERY_WORKER_MAX_MEMORY_PER_CHILD
+      value: "1228800"
+
+  configOverrides:
+    secret: |
+      import os
+      SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
+    features: |
+      SUPERSET_WEBSERVER_PROTOCOL = "https"
+      PUBLIC_ROLE_LIKE = None
+
+  extraConfigs:
+    import_datasources.yaml: |
+      databases:
+      - database_name: Trino
+        sqlalchemy_uri: trino://superset@trino.trino.svc.cluster.local:8080/iceberg
+        expose_in_sqllab: true
+        allow_ctas: false
+        allow_cvas: false
+        allow_dml: false
+        allow_file_upload: false
+        extra: '{"allows_virtual_table_explore": true}'
+
+  init:
+    createAdmin: true
+    user: admin
+    firstName: Admin
+    lastName: User
+    email: admin@example.com
+    existingPasswordSecret: superset-admin-password
+    existingPasswordSecretKey: password
+
+  supersetWorker:
+    replicas:
+      replicaCount: 1
+    resources:
+      limits:
+        memory: "1.5Gi"
+      requests:
+        memory: "512Mi"
+        cpu: "100m"
+
+  supersetNode:
+    resources:
+      limits:
+        memory: "512Mi"
+      requests:
+        memory: "256Mi"
+
+  postgresql:
+    enabled: true
+    auth:
+      existingSecret: superset-postgres-auth
+      secretKeys:
+        userPasswordKey: "password"
+      username: superset
+      database: superset
+
+  redis:
+    enabled: true
+    auth:
+      enabled: false
+
+ingress:
+  enabled: false
+  host: ""
+  className: "traefik"
+  annotations: {}
+  tlsSecretName: "ingress-tls"

@@ -1,0 +1,16 @@
+# Helm 
+charts/*/charts/*.tgz
+
+# terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+
+# binaries
+osquery-extension/aws_billing_extension
+
+# caches
+__pycache__/
+.chainlit
+.DS_Store

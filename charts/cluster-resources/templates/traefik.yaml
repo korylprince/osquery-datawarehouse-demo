@@ -1,0 +1,76 @@
+{{- if .Values.traefik.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: traefik
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+  finalizers:
+    - resources-finalizer.argoproj.io
+spec:
+  project: default
+  source:
+    chart: traefik
+    repoURL: https://traefik.github.io/charts
+    targetRevision: {{ .Values.traefik.version | quote }}
+    helm:
+      releaseName: traefik
+      valuesObject:
+        deployment:
+          revisionHistoryLimit: 0
+        service:
+          spec:
+            externalTrafficPolicy: Local
+{{- if .Values.traefik.extraEntrypoints }}
+        ports:
+          web:
+            port: 8000
+            expose:
+              default: true
+            exposedPort: 80
+            protocol: TCP
+          websecure:
+            port: 8443
+            expose:
+              default: true
+            exposedPort: 443
+            protocol: TCP
+          metrics:
+            port: 9100
+            expose:
+              default: false
+            exposedPort: 9100
+            protocol: TCP
+          traefik:
+            port: 8080
+            expose:
+              default: false
+            exposedPort: 8080
+            protocol: TCP
+{{ toYaml .Values.traefik.extraEntrypoints | nindent 10 }}
+{{- end }}
+{{- if .Values.basicAuth.enabled }}
+        extraObjects:
+          - apiVersion: traefik.io/v1alpha1
+            kind: Middleware
+            metadata:
+              name: {{ .Values.basicAuth.middlewareName }}
+              namespace: {{ .Values.basicAuth.secretNamespace }}
+            spec:
+              basicAuth:
+                removeHeader: true
+                secret: {{ .Values.basicAuth.secretName }}
+{{- end }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: traefik
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true
+{{- end }}

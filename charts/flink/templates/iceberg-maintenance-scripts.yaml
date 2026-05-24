@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: iceberg-maintenance-scripts
+  namespace: flink
+data:
+  iceberg-optimize.sh: |
+{{ .Files.Get "files/iceberg-optimize.sh" | nindent 4 }}
+  iceberg-cleanup.sh: |
+{{ .Files.Get "files/iceberg-cleanup.sh" | nindent 4 }}

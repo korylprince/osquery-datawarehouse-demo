@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dwh-chat-endpoints
+  namespace: dwh-chat
+data:
+  endpoints.yaml: |
+{{ toYaml .Values.endpoints | indent 4 }}

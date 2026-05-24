@@ -1,0 +1,5 @@
+apiVersion: v2
+name: data-warehouse-mcp
+description: Data Warehouse MCP server providing tool access to Trino/Iceberg
+type: application
+version: 0.1.0

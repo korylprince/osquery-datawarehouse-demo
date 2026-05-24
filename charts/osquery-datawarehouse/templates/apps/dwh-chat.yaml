@@ -1,0 +1,46 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dwh-chat
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    path: charts/dwh-chat
+    repoURL: {{ .Values.argocd.repoURL | quote }}
+    targetRevision: {{ .Values.argocd.targetRevision | quote }}
+    helm:
+      values: |
+        createNamespace: false
+        image:
+          registry: {{ required "global.imageRegistry is required (e.g. ghcr.io/yourorg)" .Values.global.imageRegistry | quote }}
+          tag: {{ .Values.global.imageTag | quote }}
+        endpoints:
+{{ toYaml .Values.dwhChat.endpoints | indent 10 }}
+        apiKeySecrets:
+{{ toYaml .Values.dwhChat.apiKeySecrets | indent 10 }}
+        authSecretName: {{ .Values.dwhChat.authSecretName | quote }}
+        databaseSecretName: {{ .Values.dwhChat.databaseSecretName | quote }}
+        mcpURL: {{ .Values.dwhChat.mcpURL | quote }}
+        database:
+          storage:
+            size: {{ .Values.dwhChat.database.storage.size | quote }}
+            storageClass: {{ coalesce .Values.dwhChat.database.storage.storageClass .Values.global.storageClass | quote }}
+{{- $chatExtraAnnotations := dict -}}
+{{- if .Values.basicAuth.middlewareName -}}
+{{- $_ := set $chatExtraAnnotations "traefik.ingress.kubernetes.io/router.middlewares" (printf "%s-%s@kubernetescrd" .Values.basicAuth.middlewareNamespace .Values.basicAuth.middlewareName) -}}
+{{- end -}}
+{{ include "osquery-datawarehouse.ingressValues" (dict "root" . "host" .Values.dwhChat.ingress.host "extraAnnotations" $chatExtraAnnotations) | nindent 8 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dwh-chat
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

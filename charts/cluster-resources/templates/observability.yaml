@@ -1,0 +1,167 @@
+{{- if and .Values.observability.enabled .Values.cloudnativePg.enabled }}
+---
+apiVersion: secretgenerator.mittwald.de/v1alpha1
+kind: StringSecret
+metadata:
+  name: grafana-db-password
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+spec:
+  type: kubernetes.io/basic-auth
+  data:
+    username: grafana
+  fields:
+    - fieldName: password
+      length: "32"
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: grafana-db
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+spec:
+  instances: 1
+  storage:
+    size: {{ .Values.observability.grafana.database.storageSize | quote }}
+{{- if .Values.observability.grafana.database.storageClass }}
+    storageClass: {{ .Values.observability.grafana.database.storageClass | quote }}
+{{- end }}
+  bootstrap:
+    initdb:
+      database: grafana
+      owner: grafana
+      secret:
+        name: grafana-db-password
+{{- end }}
+
+{{- if .Values.observability.enabled }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - chart: prometheus
+      repoURL: https://prometheus-community.github.io/helm-charts
+      targetRevision: {{ .Values.observability.prometheus.version | quote }}
+      helm:
+        releaseName: observability
+        valuesObject:
+          server:
+            revisionHistoryLimit: 0
+            persistentVolume:
+              enabled: true
+              accessModes:
+                - ReadWriteOnce
+              size: {{ .Values.observability.prometheus.storageSize | quote }}
+{{- if .Values.observability.prometheus.storageClass }}
+              storageClass: {{ .Values.observability.prometheus.storageClass | quote }}
+{{- end }}
+            retention: {{ .Values.observability.prometheus.retention | quote }}
+            ingress:
+              enabled: {{ .Values.observability.prometheus.ingress.enabled }}
+              ingressClassName: {{ .Values.global.ingressClassName | quote }}
+              hosts:
+                - {{ include "cluster-resources.host" (dict "root" . "name" "prometheus" "hostOverride" .Values.observability.prometheus.ingress.hostOverride) | quote }}
+              annotations:
+{{ include "cluster-resources.ingress.annotations" (dict "root" . "ingress" .Values.observability.prometheus.ingress) | nindent 16 }}
+              tls:
+{{ include "cluster-resources.ingress.tls" (dict "name" "prometheus" "host" (include "cluster-resources.host" (dict "root" . "name" "prometheus" "hostOverride" .Values.observability.prometheus.ingress.hostOverride)) "ingress" .Values.observability.prometheus.ingress) | nindent 16 }}
+          alertmanager:
+            enabled: false
+          kube-state-metrics:
+            enabled: false
+          prometheus-node-exporter:
+            enabled: false
+          prometheus-pushgateway:
+            enabled: false
+    - chart: grafana
+      repoURL: https://grafana.github.io/helm-charts
+      targetRevision: {{ .Values.observability.grafana.version | quote }}
+      helm:
+        releaseName: observability
+        valuesObject:
+          replicas: 1
+          revisionHistoryLimit: 0
+{{- if and .Values.observability.enabled .Values.cloudnativePg.enabled }}
+          grafana.ini:
+            database:
+              type: postgres
+              host: grafana-db-rw.observability.svc.cluster.local:5432
+              name: grafana
+              user: grafana
+            auth.anonymous:
+              enabled: {{ .Values.observability.grafana.anonymousAccess }}
+              org_name: Main Org.
+              org_role: Admin
+            auth:
+              disable_login_form: {{ .Values.observability.grafana.anonymousAccess }}
+          envValueFrom:
+            GF_DATABASE_PASSWORD:
+              secretKeyRef:
+                name: grafana-db-password
+                key: password
+          extraInitContainers:
+            - name: wait-for-postgres
+              image: apache/superset:dockerize
+              command: ["/bin/sh", "-c"]
+              args:
+                - dockerize -wait tcp://grafana-db-rw.observability.svc.cluster.local:5432 -timeout 120s
+{{- else }}
+          persistence:
+            enabled: true
+            type: pvc
+            accessModes:
+              - ReadWriteOnce
+            size: {{ .Values.observability.grafana.storageSize | quote }}
+{{- if .Values.observability.grafana.storageClass }}
+            storageClassName: {{ .Values.observability.grafana.storageClass | quote }}
+{{- end }}
+          grafana.ini:
+            auth.anonymous:
+              enabled: {{ .Values.observability.grafana.anonymousAccess }}
+              org_name: Main Org.
+              org_role: Admin
+            auth:
+              disable_login_form: {{ .Values.observability.grafana.anonymousAccess }}
+{{- end }}
+          datasources:
+            datasources.yaml:
+              apiVersion: 1
+              datasources:
+                - name: Prometheus
+                  type: prometheus
+                  access: proxy
+                  url: http://observability-prometheus-server.observability:80
+                  isDefault: true
+                  editable: true
+          ingress:
+            enabled: {{ .Values.observability.grafana.ingress.enabled }}
+            ingressClassName: {{ .Values.global.ingressClassName | quote }}
+            hosts:
+              - {{ include "cluster-resources.host" (dict "root" . "name" "grafana" "hostOverride" .Values.observability.grafana.ingress.hostOverride) | quote }}
+            annotations:
+{{ include "cluster-resources.ingress.annotations" (dict "root" . "ingress" .Values.observability.grafana.ingress) | nindent 14 }}
+            tls:
+{{ include "cluster-resources.ingress.tls" (dict "name" "grafana" "host" (include "cluster-resources.host" (dict "root" . "name" "grafana" "hostOverride" .Values.observability.grafana.ingress.hostOverride)) "ingress" .Values.observability.grafana.ingress) | nindent 14 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - SkipDryRunOnMissingResource=true
+{{- end }}

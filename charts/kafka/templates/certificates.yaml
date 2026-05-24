@@ -1,0 +1,26 @@
+{{- if .Values.external.enabled }}
+---
+# Client certificate for mTLS authentication
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kafka-client-cert
+  namespace: kafka
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretName: kafka-client-cert
+  commonName: kafka-client
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    encoding: PKCS8
+  duration: 2160h
+  renewBefore: 360h
+  uris:
+    - "1.2.3.4.5.1.2.3.456789.1.1"
+  issuerRef:
+    name: {{ .Values.external.authentication.issuerName | quote }}
+    kind: Issuer
+{{- end }}

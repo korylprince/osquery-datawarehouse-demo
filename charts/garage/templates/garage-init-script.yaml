@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: garage-init-script
+  namespace: garage
+data:
+  garage-init.py: |
+{{ .Files.Get "files/garage-init.py" | nindent 4 }}

@@ -1,0 +1,79 @@
+{{- if or .Values.certManager.enabled .Values.certManager.clusterIssuer.enabled .Values.certManager.sharedCertificate.enabled .Values.certManager.pkcs8Certificate.enabled }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+{{- end }}
+
+{{- if .Values.replicator.enabled }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: replicator
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+{{- end }}
+
+{{- if .Values.passwordGenerator.enabled }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: password-generator
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+{{- end }}
+
+{{- if .Values.traefik.enabled }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: traefik
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+{{- end }}
+
+{{- if .Values.registry.enabled }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: registry
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+{{- end }}
+
+{{- if .Values.certManager.kafkaCa.enabled }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kafka
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+{{- end }}
+
+{{- if .Values.cloudnativePg.enabled }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cloudnative-pg
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+{{- end }}
+
+{{- if .Values.observability.enabled }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+{{- end }}

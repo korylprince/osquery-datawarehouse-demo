@@ -1,0 +1,72 @@
+{{- if .Values.registry.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.registry.claimName }}
+  namespace: registry
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+spec:
+  accessModes:
+    - ReadWriteOnce
+{{- if .Values.registry.storageClass }}
+  storageClassName: {{ .Values.registry.storageClass | quote }}
+{{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.registry.storageSize | quote }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: registry
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: docker-registry
+    repoURL: https://twuni.github.io/docker-registry.helm
+    targetRevision: {{ .Values.registry.version | quote }}
+    helm:
+      valuesObject:
+        persistence:
+          enabled: true
+          deleteEnabled: true
+          existingClaim: {{ .Values.registry.claimName | quote }}
+        service:
+          type: ClusterIP
+        ingress:
+          enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: registry
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry-nodeport
+  namespace: registry
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+spec:
+  type: NodePort
+  selector:
+    app: docker-registry
+    release: registry
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
+      nodePort: {{ .Values.registry.nodePort }}
+{{- end }}

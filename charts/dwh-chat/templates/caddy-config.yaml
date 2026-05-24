@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dwh-chat-caddy
+  namespace: dwh-chat
+data:
+  Caddyfile: |
+    {
+        admin off
+    }
+
+    :8080 {
+        handle /healthz {
+            respond "ok" 200
+        }
+
+        handle /assets/* {
+            root * /static/chainlit
+            header Cache-Control "public, max-age=31536000, immutable"
+            file_server
+        }
+
+        handle /public/* {
+            root * /static
+            header Cache-Control "public, max-age=3600"
+            file_server
+        }
+
+        reverse_proxy 127.0.0.1:18080 {
+            flush_interval -1
+        }
+    }

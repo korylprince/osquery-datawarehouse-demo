@@ -1,0 +1,88 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: polaris-bootstrap
+  namespace: polaris
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: polaris-bootstrap
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: polaris-bootstrap
+          image: apache/polaris-admin-tool:1.4.1
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              credential="${POLARIS_BOOTSTRAP_REALM},${POLARIS_BOOTSTRAP_CLIENT_ID},${POLARIS_BOOTSTRAP_CLIENT_SECRET}"
+              for attempt in $(seq 1 60); do
+                echo "Bootstrapping Polaris metastore (attempt ${attempt}/60)..."
+                output=$(java -jar /deployments/polaris-admin-tool.jar bootstrap                   -r "${POLARIS_BOOTSTRAP_REALM}"                   -c "${credential}" 2>&1) && {
+                  echo "Polaris metastore bootstrap complete."
+                  exit 0
+                }
+                echo "${output}"
+                if echo "${output}" | grep -qi "already been bootstrapped"; then
+                  echo "Polaris metastore already bootstrapped, nothing to do."
+                  exit 0
+                fi
+                sleep 5
+              done
+              echo "Polaris metastore bootstrap failed after 60 attempts." >&2
+              exit 1
+          env:
+            - name: polaris.persistence.type
+              value: relational-jdbc
+            - name: quarkus.datasource.username
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.databaseSecretName | quote }}
+                  key: username
+            - name: quarkus.datasource.password
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.databaseSecretName | quote }}
+                  key: password
+            - name: quarkus.datasource.jdbc.url
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.databaseSecretName | quote }}
+                  key: jdbcUrl
+            - name: POLARIS_BOOTSTRAP_REALM
+              value: POLARIS
+            - name: POLARIS_BOOTSTRAP_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.rootCredentialsSecretName | quote }}
+                  key: client-id
+            - name: POLARIS_BOOTSTRAP_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.rootCredentialsSecretName | quote }}
+                  key: client-secret
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

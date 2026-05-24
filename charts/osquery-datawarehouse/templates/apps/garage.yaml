@@ -1,0 +1,59 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: garage
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/deuxfleurs-org/garage.git
+      path: script/helm/garage
+      targetRevision: v2.2.0
+      helm:
+        valuesObject:
+          deployment:
+            replicaCount: 1
+          garage:
+            replicationFactor: 1
+          persistence:
+            data:
+              size: {{ .Values.garage.storage.size | quote }}
+              storageClass: {{ coalesce .Values.garage.storage.storageClass .Values.global.storageClass | quote }}
+            meta:
+              storageClass: {{ coalesce .Values.garage.storage.storageClass .Values.global.storageClass | quote }}
+          monitoring:
+            metrics:
+              enabled: true
+          environment:
+            - name: GARAGE_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.garage.adminTokenSecretName | quote }}
+                  key: token
+    - repoURL: {{ .Values.argocd.repoURL | quote }}
+      targetRevision: {{ .Values.argocd.targetRevision | quote }}
+      path: charts/garage
+      helm:
+        values: |
+          createNamespace: false
+          adminTokenSecretName: {{ .Values.garage.adminTokenSecretName | quote }}
+          storage:
+            size: {{ .Values.garage.storage.size | quote }}
+            storageClass: {{ coalesce .Values.garage.storage.storageClass .Values.global.storageClass | quote }}
+            capacityBytes: 10000000000
+          zone: {{ .Values.garage.zone | quote }}
+          endpoint: {{ .Values.garage.endpoint | quote }}
+          replicationNamespaces: {{ .Values.garage.replicationNamespaces | quote }}
+  destination:
+    namespace: garage
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

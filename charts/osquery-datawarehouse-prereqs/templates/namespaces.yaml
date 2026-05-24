@@ -1,0 +1,37 @@
+{{- range $ns := list "garage" "strimzi-operator" "polaris" "trino" "flink" "data-warehouse-mcp" "superset" }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+{{- end }}
+
+{{- if .Values.namespaces.kafka.enabled }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kafka
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+{{- end }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dwh-chat
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: build-images
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  labels:
+    pod-security.kubernetes.io/enforce: privileged

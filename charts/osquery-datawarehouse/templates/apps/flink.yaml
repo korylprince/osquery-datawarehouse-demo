@@ -1,0 +1,59 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: flink
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    path: charts/flink
+    repoURL: {{ .Values.argocd.repoURL | quote }}
+    targetRevision: {{ .Values.argocd.targetRevision | quote }}
+    helm:
+      values: |
+        createNamespace: false
+        image:
+          registry: {{ required "global.imageRegistry is required (e.g. ghcr.io/yourorg)" .Values.global.imageRegistry | quote }}
+          tag: {{ .Values.global.imageTag | quote }}
+        s3CredentialsSecretName: {{ .Values.flink.s3CredentialsSecretName | quote }}
+        polarisCredentialsSecretName: {{ .Values.flink.polarisCredentialsSecretName | quote }}
+        polarisURI: {{ .Values.flink.polarisURI | quote }}
+        garageEndpoint: {{ .Values.flink.garageEndpoint | quote }}
+        kafkaBootstrap: {{ .Values.flink.kafkaBootstrap | quote }}
+        trinoEndpoint: {{ .Values.flink.trinoEndpoint | quote }}
+        flink:
+          jobManager:
+            cpu: {{ .Values.flink.jobManager.cpu }}
+            cpuLimitFactor: {{ .Values.flink.jobManager.cpuLimitFactor }}
+            memory: {{ .Values.flink.jobManager.memory | quote }}
+            memoryLimitFactor: {{ .Values.flink.jobManager.memoryLimitFactor }}
+          taskManager:
+            cpu: {{ .Values.flink.taskManager.cpu }}
+            cpuLimitFactor: {{ .Values.flink.taskManager.cpuLimitFactor }}
+            memory: {{ .Values.flink.taskManager.memory | quote }}
+            memoryLimitFactor: {{ .Values.flink.taskManager.memoryLimitFactor }}
+{{- $flinkExtraAnnotations := dict -}}
+{{- if .Values.basicAuth.middlewareName -}}
+{{- $_ := set $flinkExtraAnnotations "traefik.ingress.kubernetes.io/router.middlewares" (printf "%s-%s@kubernetescrd" .Values.basicAuth.middlewareNamespace .Values.basicAuth.middlewareName) -}}
+{{- end -}}
+{{ include "osquery-datawarehouse.ingressValues" (dict "root" . "host" .Values.flink.ingress.host "extraAnnotations" $flinkExtraAnnotations) | nindent 8 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: flink
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jqPathExpressions:
+        - .spec.conversion
+        - .spec.names.listKind
+        - .spec.versions[].additionalPrinterColumns[].priority
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

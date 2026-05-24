@@ -1,0 +1,54 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: trino
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    path: charts/trino
+    repoURL: {{ .Values.argocd.repoURL | quote }}
+    targetRevision: {{ .Values.argocd.targetRevision | quote }}
+    helm:
+      values: |
+        createNamespace: false
+        trino:
+          server:
+            workers: {{ .Values.trino.workers }}
+          env:
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.trino.s3CredentialsSecretName | quote }}
+                  key: AWS_ACCESS_KEY_ID
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.trino.s3CredentialsSecretName | quote }}
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: POLARIS_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.trino.polarisCredentialsSecretName | quote }}
+                  key: client-secret
+            - name: AWS_REQUEST_CHECKSUM_CALCULATION
+              value: WHEN_REQUIRED
+          coordinator:
+            jvm:
+              maxHeapSize: {{ .Values.trino.coordinator.maxHeapSize | quote }}
+        s3CredentialsSecretName: {{ .Values.trino.s3CredentialsSecretName | quote }}
+        polarisCredentialsSecretName: {{ .Values.trino.polarisCredentialsSecretName | quote }}
+{{ include "osquery-datawarehouse.ingressValues" (dict "root" . "host" .Values.trino.ingress.host) | nindent 8 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: trino
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

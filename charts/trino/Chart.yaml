@@ -1,0 +1,10 @@
+apiVersion: v2
+name: trino
+description: Trino query engine connected to Polaris/Iceberg and Garage S3
+type: application
+version: 0.1.0
+dependencies:
+  - name: trino
+    repository: https://trinodb.github.io/charts/
+    version: "1.42.1"
+    alias: trino

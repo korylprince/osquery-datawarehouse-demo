@@ -1,0 +1,40 @@
+/* Hide thumbs-up / thumbs-down feedback buttons */
+button[class*="positive-feedback"],
+button[class*="negative-feedback"] {
+  display: none !important;
+}
+
+/* Hide the readme button */
+#readme-button {
+  display: none !important;
+}
+
+/* Make images (e.g. charts) full-width */
+.message-content img {
+  cursor: zoom-in !important;
+}
+
+/* Lightbox overlay */
+#img-lightbox {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.85);
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+}
+
+#img-lightbox.active {
+  display: flex;
+}
+
+#img-lightbox-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  cursor: default;
+}

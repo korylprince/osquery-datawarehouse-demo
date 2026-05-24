@@ -1,0 +1,173 @@
+{{- if .Values.certManager.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: cert-manager
+    repoURL: https://charts.jetstack.io
+    targetRevision: {{ .Values.certManager.version | quote }}
+    helm:
+      valuesObject:
+        crds:
+          enabled: true
+{{- with .Values.certManager.extraArgs }}
+        extraArgs:
+{{ toYaml . | nindent 10 }}
+{{- end }}
+        global:
+          revisionHistoryLimit: 0
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+{{- end }}
+
+{{- if .Values.certManager.clusterIssuer.enabled }}
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ .Values.certManager.clusterIssuer.name }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+{{- with .Values.certManager.clusterIssuer.annotations }}
+{{ toYaml . | nindent 4 }}
+{{- end }}
+spec:
+  acme:
+    server: {{ .Values.certManager.clusterIssuer.acme.server | quote }}
+    privateKeySecretRef:
+      name: {{ .Values.certManager.clusterIssuer.acme.privateKeySecretName | quote }}
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: {{ .Values.certManager.clusterIssuer.acme.dns01.cloudflare.apiTokenSecretName | quote }}
+              key: {{ .Values.certManager.clusterIssuer.acme.dns01.cloudflare.apiTokenSecretKey | quote }}
+{{- end }}
+
+{{- if .Values.certManager.sharedCertificate.enabled }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.certManager.sharedCertificate.name }}
+  namespace: cert-manager
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretName: {{ .Values.certManager.sharedCertificate.secretName | quote }}
+{{- with .Values.certManager.sharedCertificate.replicateToNamespaces }}
+  secretTemplate:
+    annotations:
+      replicator.v1.mittwald.de/replicate-to: {{ join "," . | quote }}
+{{- end }}
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  duration: 2160h
+  renewBefore: 360h
+  dnsNames:
+{{ include "cluster-resources.certificateDnsNames" (dict "rootDomain" .Values.certManager.sharedCertificate.rootDomain "domainPrefix" .Values.global.domainPrefix "extraDnsNames" .Values.certManager.sharedCertificate.extraDnsNames) | nindent 4 }}
+  issuerRef:
+    name: {{ .Values.certManager.clusterIssuer.name | quote }}
+    kind: ClusterIssuer
+{{- end }}
+
+{{- if .Values.certManager.pkcs8Certificate.enabled }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.certManager.pkcs8Certificate.name }}
+  namespace: cert-manager
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretName: {{ .Values.certManager.pkcs8Certificate.secretName | quote }}
+{{- with .Values.certManager.pkcs8Certificate.replicateToNamespaces }}
+  secretTemplate:
+    annotations:
+      replicator.v1.mittwald.de/replicate-to: {{ join "," . | quote }}
+{{- end }}
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS8
+    size: 2048
+  duration: 2160h
+  renewBefore: 360h
+  dnsNames:
+{{ include "cluster-resources.certificateDnsNames" (dict "rootDomain" .Values.certManager.pkcs8Certificate.rootDomain "domainPrefix" .Values.global.domainPrefix "extraDnsNames" .Values.certManager.pkcs8Certificate.extraDnsNames) | nindent 4 }}
+  issuerRef:
+    name: {{ .Values.certManager.clusterIssuer.name | quote }}
+    kind: ClusterIssuer
+{{- end }}
+
+{{- if .Values.certManager.kafkaCa.enabled }}
+---
+# Bootstrap issuer: self-signed CA to create the kafka-ca root certificate
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ .Values.certManager.kafkaCa.bootstrapIssuerName }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  selfSigned: {}
+---
+# Root CA certificate for Kafka mTLS client authentication
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.certManager.kafkaCa.name }}
+  namespace: {{ .Values.certManager.kafkaCa.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretName: {{ .Values.certManager.kafkaCa.secretName }}
+  isCA: true
+  commonName: {{ .Values.certManager.kafkaCa.name }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  duration: 87600h # 10 years
+  renewBefore: 720h # 30 days
+  issuerRef:
+    name: {{ .Values.certManager.kafkaCa.bootstrapIssuerName }}
+    kind: ClusterIssuer
+---
+# CA issuer: uses the kafka-ca secret to sign client certificates
+# Using a namespaced Issuer (not ClusterIssuer) so it finds the CA secret
+# in the same namespace where the kafka-ca Certificate was created.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Values.certManager.kafkaCa.issuerName }}
+  namespace: {{ .Values.certManager.kafkaCa.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  ca:
+    secretName: {{ .Values.certManager.kafkaCa.secretName }}
+{{- end }}

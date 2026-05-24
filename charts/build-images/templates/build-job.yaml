@@ -1,0 +1,168 @@
+{{- range .Values.images }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: build-{{ .name }}
+  namespace: build-images
+  annotations:
+    argocd.argoproj.io/sync-options: Force=true,Replace=true
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      serviceAccountName: build-images
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: false
+      volumes:
+{{- if $.Values.registrySecretName }}
+        - name: registry-secret
+          secret:
+            secretName: {{ $.Values.registrySecretName }}
+            items:
+              - key: .dockerconfigjson
+                path: config.json
+{{- end }}
+        - name: workspace
+          emptyDir: {}
+        - name: varlibcontainers
+          emptyDir: {}
+      initContainers:
+        - name: check-image
+          image: {{ $.Values.manifestCheckImage | quote }}
+          command: ["/busybox/sh", "-ec"]
+          args:
+            - |
+              IMAGE={{ printf "%s/%s:%s" $.Values.imageRegistry .name $.Values.imageTag | quote }}
+              INSECURE_REGISTRY={{ ternary "true" "false" $.Values.insecureRegistry | quote }}
+              CRANE_ARGS=""
+              if [ "${INSECURE_REGISTRY}" = "true" ]; then
+                CRANE_ARGS="--insecure"
+              fi
+              echo "Checking if ${IMAGE} exists..."
+              if crane manifest ${CRANE_ARGS} "${IMAGE}" >/dev/null 2>&1; then
+                echo "Image ${IMAGE} already exists, skipping build."
+                touch /workspace/image-exists
+              else
+                echo "Image ${IMAGE} not found, continuing with build."
+              fi
+{{- if $.Values.registrySecretName }}
+          env:
+            - name: DOCKER_CONFIG
+              value: /workspace/dockerconfig
+{{- end }}
+          volumeMounts:
+{{- if $.Values.registrySecretName }}
+            - name: registry-secret
+              mountPath: /workspace/dockerconfig
+              readOnly: true
+{{- end }}
+            - name: workspace
+              mountPath: /workspace
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+        - name: fetch-source
+          image: {{ $.Values.gitImage | quote }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              if [ -f /workspace/image-exists ]; then
+                echo "Skipping source checkout because image already exists."
+                exit 0
+              fi
+              REVISION={{ $.Values.gitRevision | quote }}
+              GIT_URL={{ $.Values.gitURL | quote }}
+{{- if $.Values.gitCredentialsSecretName }}
+              if [ -n "${GIT_USERNAME:-}" ] && [ -n "${GIT_PASSWORD:-}" ]; then
+                GIT_HOST="$(printf '%s' "${GIT_URL}" | sed -E 's#^[^:]+://([^/@]+@)?([^/:]+).*$#\2#')"
+                if [ -n "${GIT_HOST}" ] && [ "${GIT_HOST}" != "${GIT_URL}" ]; then
+                  printf 'machine %s\nlogin %s\npassword %s\n' "${GIT_HOST}" "${GIT_USERNAME}" "${GIT_PASSWORD}" > /root/.netrc
+                  chmod 600 /root/.netrc
+                fi
+              fi
+{{- end }}
+              git clone --depth=1 "${GIT_URL}" /workspace/repo
+              cd /workspace/repo
+              if [ "${REVISION}" != "HEAD" ]; then
+                git fetch --depth=1 origin "${REVISION}"
+                git checkout FETCH_HEAD
+              fi
+{{- if $.Values.gitCredentialsSecretName }}
+          env:
+            - name: GIT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.gitCredentialsSecretName }}
+                  key: username
+            - name: GIT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.gitCredentialsSecretName }}
+                  key: password
+{{- end }}
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      containers:
+        - name: build
+          image: {{ $.Values.buildahImage | quote }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              IMAGE={{ printf "%s/%s:%s" $.Values.imageRegistry .name $.Values.imageTag | quote }}
+              TLS_VERIFY={{ ternary "false" "true" $.Values.insecureRegistry | quote }}
+              DOCKERFILE={{ printf "%s/Dockerfile" .dockerfilePath | quote }}
+              CONTEXT={{ .dockerfilePath | quote }}
+              if [ -f /workspace/image-exists ]; then
+                echo "Image ${IMAGE} already exists, skipping build."
+                exit 0
+              fi
+              mkdir -p /workspace/repo/.tmp
+              cd /workspace/repo
+              echo "Building ${IMAGE}..."
+              buildah "--storage-driver={{ $.Values.buildahStorageDriver }}" bud \
+                --format=docker \
+                --tls-verify="${TLS_VERIFY}" \
+                -f "${DOCKERFILE}" \
+                -t "${IMAGE}" \
+                "${CONTEXT}"
+              echo "Pushing ${IMAGE}..."
+              buildah "--storage-driver={{ $.Values.buildahStorageDriver }}" push \
+                --tls-verify="${TLS_VERIFY}" \
+                "${IMAGE}" "docker://${IMAGE}"
+          env:
+            - name: TMPDIR
+              value: /workspace/repo/.tmp
+{{- if $.Values.registrySecretName }}
+            - name: DOCKER_CONFIG
+              value: /workspace/dockerconfig
+{{- end }}
+          volumeMounts:
+{{- if $.Values.registrySecretName }}
+            - name: registry-secret
+              mountPath: /workspace/dockerconfig
+              readOnly: true
+{{- end }}
+            - name: workspace
+              mountPath: /workspace
+            - name: varlibcontainers
+              mountPath: /var/lib/containers
+          resources:
+            requests:
+              cpu: "100m"
+              memory: 2Gi
+            limits:
+              cpu: "1"
+              memory: 8Gi
+          securityContext:
+            privileged: true
+{{- end }}

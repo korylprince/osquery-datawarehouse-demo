@@ -1,0 +1,8 @@
+{{- if .Values.createNamespace }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dwh-chat
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+{{- end }}

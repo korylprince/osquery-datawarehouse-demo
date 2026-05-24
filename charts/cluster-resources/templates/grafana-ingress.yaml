@@ -1,0 +1,27 @@
+{{- if and .Values.basicAuth.enabled .Values.basicAuth.grafanaIngressHost }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-server
+  namespace: observability
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+    traefik.ingress.kubernetes.io/router.middlewares: "{{ .Values.basicAuth.secretNamespace }}-{{ .Values.basicAuth.middlewareName }}@kubernetescrd"
+spec:
+  ingressClassName: {{ .Values.global.ingressClassName }}
+  rules:
+    - host: {{ .Values.basicAuth.grafanaIngressHost | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: observability-grafana
+                port:
+                  number: 80
+  tls:
+    - secretName: {{ .Values.osqueryDataWarehouse.ingress.tlsSecretName }}
+      hosts:
+        - {{ .Values.basicAuth.grafanaIngressHost | quote }}
+{{- end }}

@@ -1,0 +1,30 @@
+{{- if and .Values.ingress.enabled .Values.ingress.host }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: data-warehouse-mcp-ingress
+  namespace: data-warehouse-mcp
+{{- with .Values.ingress.annotations }}
+  annotations:
+{{ toYaml . | nindent 4 }}
+{{- end }}
+spec:
+{{- with .Values.ingress.className }}
+  ingressClassName: {{ . | quote }}
+{{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /images
+            pathType: Prefix
+            backend:
+              service:
+                name: data-warehouse-mcp
+                port:
+                  number: 8080
+  tls:
+    - secretName: {{ .Values.ingress.tlsSecretName | quote }}
+      hosts:
+        - {{ .Values.ingress.host | quote }}
+{{- end }}

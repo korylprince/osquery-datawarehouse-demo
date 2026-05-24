@@ -1,0 +1,95 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: iceberg-optimize
+  namespace: flink
+spec:
+  schedule: "15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: optimize
+              image: trinodb/trino:480
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              env:
+                - name: TRINO_URL
+                  value: {{ .Values.trinoEndpoint | quote }}
+              command: ["/bin/bash", "/scripts/iceberg-optimize.sh"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                - name: tmp
+                  mountPath: /tmp
+          restartPolicy: OnFailure
+          volumes:
+            - name: scripts
+              configMap:
+                name: iceberg-maintenance-scripts
+                defaultMode: 0555
+            - name: tmp
+              emptyDir: {}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: iceberg-cleanup
+  namespace: flink
+spec:
+  schedule: "0 4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: cleanup
+              image: trinodb/trino:480
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              env:
+                - name: TRINO_URL
+                  value: {{ .Values.trinoEndpoint | quote }}
+              command: ["/bin/bash", "/scripts/iceberg-cleanup.sh"]
+              volumeMounts:
+                - name: scripts
+                  mountPath: /scripts
+                - name: tmp
+                  mountPath: /tmp
+          restartPolicy: OnFailure
+          volumes:
+            - name: scripts
+              configMap:
+                name: iceberg-maintenance-scripts
+                defaultMode: 0555
+            - name: tmp
+              emptyDir: {}

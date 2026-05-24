@@ -1,0 +1,10 @@
+{
+  "navigation": {
+    "newChat": {
+      "dialog": {
+        "title": "Start New Chat",
+        "description": "This will start a new chat. Your current conversation will be saved and accessible from the sidebar. Are you sure you want to continue?"
+      }
+    }
+  }
+}

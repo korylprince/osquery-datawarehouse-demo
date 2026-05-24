@@ -1,0 +1,10 @@
+apiVersion: v2
+name: flink
+description: Apache Flink job for streaming osquery events to Iceberg
+type: application
+version: 0.1.0
+dependencies:
+  - name: flink-kubernetes-operator
+    repository: https://downloads.apache.org/flink/flink-kubernetes-operator-1.14.0/
+    version: "1.14.0"
+    alias: operator

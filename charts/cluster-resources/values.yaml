@@ -1,0 +1,196 @@
+global:
+  domainPrefix: "example.com"
+  ingressClassName: "traefik"
+
+argocd:
+  namespace: "argocd"
+  repoURL: "https://github.com/korylprince/osquery-datawarehouse-demo.git"
+  targetRevision: "HEAD"
+  enabled: true
+  version: "v3.4.3"
+
+basicAuth:
+  enabled: false
+  secretName: "basic-auth"
+  secretNamespace: "traefik"
+  middlewareName: "basic-auth"
+  argoIngressHost: ""
+  grafanaIngressHost: ""
+
+localPathProvisioner:
+  enabled: true
+  version: "v0.0.32"
+  nodePath: "/opt/local-storage"
+  isDefault: true
+
+certManager:
+  enabled: true
+  version: "1.19.1"
+  clusterIssuer:
+    enabled: true
+    name: "letsencrypt-prod"
+    annotations: {}
+    acme:
+      server: "https://acme-v02.api.letsencrypt.org/directory"
+      privateKeySecretName: "letsencrypt-prod"
+      dns01:
+        cloudflare:
+          zone: "example.com"
+          apiTokenSecretName: "cloudflare-api-token-secret"
+          apiTokenSecretKey: "api-token"
+  sharedCertificate:
+    enabled: true
+    name: "ingress-tls"
+    secretName: "ingress-tls"
+    rootDomain: "example.com"
+    extraDnsNames:
+      - "*.example.com"
+    replicateToNamespaces:
+      - "argocd"
+      - "observability"
+      - "garage"
+      - "superset"
+      - "polaris"
+      - "trino"
+      - "flink"
+      - "data-warehouse-mcp"
+      - "dwh-chat"
+  pkcs8Certificate:
+    enabled: true
+    name: "ingress-tls-pkcs8"
+    secretName: "ingress-tls-pkcs8"
+    rootDomain: "example.com"
+    extraDnsNames:
+      - "*.example.com"
+    replicateToNamespaces:
+      - "kafka"
+  kafkaCa:
+    enabled: true
+    name: "kafka-ca"
+    secretName: "kafka-ca"
+    namespace: "kafka"
+    bootstrapIssuerName: "kafka-ca-bootstrap"
+    issuerName: "kafka-ca-issuer"
+
+replicator:
+  enabled: true
+  version: "2.12.2"
+
+passwordGenerator:
+  enabled: true
+  version: "3.4.1"
+
+traefik:
+  enabled: true
+  version: "40.3.0"
+  extraEntrypoints:
+    kafka:
+      port: 9093
+      protocol: TCP
+      expose:
+        default: true
+      exposedPort: 9093
+
+registry:
+  enabled: true
+  version: "2.2.3"
+  claimName: "registry"
+  storageSize: "50Gi"
+  storageClass: "local-path"
+  nodePort: 31234
+
+buildImages:
+  enabled: true
+  imageRegistry: "registry-docker-registry.registry.svc.cluster.local:5000"
+  imageTag: "latest"
+  gitURL: "https://github.com/korylprince/osquery-datawarehouse-demo.git"
+  gitRevision: "HEAD"
+  gitCredentialsSecretName: ""
+  registrySecretName: ""
+  insecureRegistry: true
+  manifestCheckImage: "gcr.io/go-containerregistry/crane:debug"
+  gitImage: "alpine/git"
+  buildahImage: "quay.io/buildah/stable:v1"
+  buildahStorageDriver: "overlay"
+
+osqueryDataWarehousePrereqs:
+  enabled: false
+
+osqueryDataWarehouse:
+  enabled: false
+  imageRegistry: "localhost:31234" # registry hosted on node port
+  imageTag: "latest"
+  storageClass: "local-path"
+  ingress:
+    enabled: false
+    className: "traefik"
+    annotations: {}
+    tlsSecretName: "ingress-tls"
+  garage:
+    replicationNamespaces: "polaris,trino,flink"
+  kafka:
+    external:
+      enabled: false
+      host: ""
+      tlsSecretName: "ingress-tls-pkcs8"
+      authentication:
+        enabled: true
+        caSecretName: "kafka-ca"
+        issuerName: "kafka-ca-issuer"
+  flink:
+    jobManager:
+      cpu: 0.2
+      cpuLimitFactor: 2.0
+      memory: "1024m"
+      memoryLimitFactor: 2.0
+    taskManager:
+      cpu: 1
+      cpuLimitFactor: 3.0
+      memory: "2048m"
+      memoryLimitFactor: 2.0
+  superset:
+    ingress:
+      host: ""
+  dwhChat:
+    endpoints:
+      - name: "Local"
+        baseUrl: "http://model-router.model-api-operator.svc.cluster.local:8080"
+        models:
+          - "my-model"
+    apiKeySecrets: []
+    ingress:
+      host: ""
+
+cloudnativePg:
+  enabled: true
+  version: "0.27.1"
+
+observability:
+  enabled: true
+  prometheus:
+    version: "27.5.1"
+    storageSize: "3Gi"
+    storageClass: ""
+    retention: "1w"
+    ingress:
+      enabled: false
+      hostOverride: ""
+      annotations: {}
+      tls:
+        enabled: false
+        secretName: ""
+  grafana:
+    version: "8.8.2"
+    storageSize: "1Gi"
+    storageClass: ""
+    anonymousAccess: true
+    database:
+      storageSize: "1Gi"
+      storageClass: ""
+    ingress:
+      enabled: false
+      hostOverride: ""
+      annotations: {}
+      tls:
+        enabled: false
+        secretName: ""

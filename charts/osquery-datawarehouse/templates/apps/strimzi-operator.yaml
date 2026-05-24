@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: strimzi-operator
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: my-strimzi-kafka-operator
+    repoURL: oci://quay.io/strimzi-helm/strimzi-kafka-operator
+    targetRevision: "0.51.0"
+    helm:
+      parameters:
+        - name: watchAnyNamespace
+          value: "false"
+        - name: watchNamespaces[0]
+          value: "kafka"
+        - name: resources.requests.cpu
+          value: "100m"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: strimzi-operator
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

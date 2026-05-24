@@ -1,0 +1,5 @@
+apiVersion: v2
+name: garage
+description: Garage S3-compatible storage overlay resources (init job, RBAC)
+type: application
+version: 0.1.0

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: osquery-datawarehouse-prereqs
+description: Namespaces and generated secrets for the osquery data warehouse stack
+type: application
+version: 0.1.0

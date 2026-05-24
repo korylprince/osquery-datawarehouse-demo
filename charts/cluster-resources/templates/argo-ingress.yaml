@@ -1,0 +1,27 @@
+{{- if and .Values.basicAuth.enabled .Values.basicAuth.argoIngressHost }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argo-server
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+    traefik.ingress.kubernetes.io/router.middlewares: "{{ .Values.basicAuth.secretNamespace }}-{{ .Values.basicAuth.middlewareName }}@kubernetescrd"
+spec:
+  ingressClassName: {{ .Values.global.ingressClassName }}
+  rules:
+    - host: {{ .Values.basicAuth.argoIngressHost | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80
+  tls:
+    - secretName: {{ .Values.osqueryDataWarehouse.ingress.tlsSecretName }}
+      hosts:
+        - {{ .Values.basicAuth.argoIngressHost | quote }}
+{{- end }}

@@ -1,0 +1,31 @@
+createNamespace: true
+image:
+  registry: ""
+  repository: "data-warehouse-mcp"
+  tag: "latest"
+
+runtimeClassName: ""
+
+trinoHost: "trino.trino.svc.cluster.local"
+trinoPort: "8080"
+trinoScheme: "http"
+
+imageBaseURL: ""
+storage:
+  size: "10Gi"
+  storageClass: "standard"
+
+ingress:
+  enabled: false
+  host: ""
+  className: "traefik"
+  annotations: {}
+  tlsSecretName: "ingress-tls"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi

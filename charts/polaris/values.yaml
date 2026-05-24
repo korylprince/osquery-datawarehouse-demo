@@ -1,0 +1,79 @@
+createNamespace: true
+polaris:
+  image:
+    tag: "1.4.1"
+  replicaCount: 1
+  resources:
+    requests:
+      memory: 1Gi
+    limits:
+      memory: 1500Mi
+  persistence:
+    type: relational-jdbc
+    relationalJdbc:
+      secret:
+        name: "polaris-database-app"
+        username: username
+        password: password
+        jdbcUrl: jdbcUrl
+  realmContext:
+    type: default
+    realms:
+      - POLARIS
+  authentication:
+    type: internal
+    tokenBroker:
+      type: symmetric-key
+      secret:
+        name: "token-key"
+        symmetricKey:
+          secretKey: "symmetric.key"
+  storage:
+    secret:
+      name: "garage-s3-credentials"
+      awsAccessKeyId: AWS_ACCESS_KEY_ID
+      awsSecretAccessKey: AWS_SECRET_ACCESS_KEY
+  advancedConfig:
+    quarkus.http.proxy.proxy-address-forwarding: "true"
+    quarkus.http.proxy.allow-x-forwarded: "true"
+    quarkus.http.proxy.enable-forwarded-host: "true"
+    quarkus.http.proxy.trusted-proxies: "10.0.0.0/8"
+    polaris.features."SKIP_CREDENTIAL_SUBSCOPING_INDIRECTION": "false"
+    polaris.features."DROP_WITH_PURGE_ENABLED": "true"
+  extraEnv:
+    - name: AWS_REGION
+      value: "garage"
+    - name: AWS_REQUEST_CHECKSUM_CALCULATION
+      value: "WHEN_REQUIRED"
+    - name: AWS_ACCESS_KEY_ID
+      valueFrom:
+        secretKeyRef:
+          name: "garage-s3-credentials"
+          key: AWS_ACCESS_KEY_ID
+    - name: AWS_SECRET_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: "garage-s3-credentials"
+          key: AWS_SECRET_ACCESS_KEY
+    - name: AWS_ENDPOINT_URL_S3
+      value: "http://garage.garage.svc.cluster.local:3900"
+    - name: AWS_S3_FORCE_PATH_STYLE
+      value: "true"
+    - name: JAVA_OPTS
+      value: "-Xmx1g -XX:MaxMetaspaceSize=256m"
+
+storage:
+  size: "20Gi"
+  storageClass: "standard"
+tokenKeySecretName: "token-key"
+rootCredentialsSecretName: "polaris-root-credentials"
+databaseSecretName: "polaris-database-app"
+s3CredentialsSecretName: "garage-s3-credentials"
+garageEndpoint: "http://garage.garage.svc.cluster.local:3900"
+polarisHost: "http://polaris.polaris.svc.cluster.local:8181"
+ingress:
+  enabled: false
+  host: ""
+  className: "traefik"
+  annotations: {}
+  tlsSecretName: "ingress-tls"

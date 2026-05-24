@@ -1,0 +1,52 @@
+createNamespace: true
+image:
+  registry: ""
+  repository: "dwh-chat"
+  tag: "latest"
+
+# endpoints is rendered into a ConfigMap and mounted at /config/endpoints.yaml.
+# Use apiKeyFile in an endpoint entry to reference a file mounted via apiKeySecrets.
+endpoints:
+  - name: "Local"
+    baseUrl: "http://model-router.model-api-operator.svc.cluster.local:8080"
+    models:
+      - "my-model"
+  # Example with an API key mounted from a secret:
+  # - name: "OpenAI"
+  #   baseUrl: "https://api.openai.com"
+  #   models:
+  #     - "gpt-4o"
+  #   apiKeyFile: /secrets/openai-api-key
+
+# Mount secret keys as files so endpoints can reference them via apiKeyFile.
+# Each entry mounts secretName[key] as a file at mountPath inside the pod.
+# Example:
+#   - secretName: my-openai-key
+#     key: api-key
+#     mountPath: /secrets/openai-api-key
+apiKeySecrets: []
+
+authSecretName: "dwh-chat-auth"
+databaseSecretName: "dwh-chat-db"
+
+mcpURL: "http://data-warehouse-mcp.data-warehouse-mcp.svc.cluster.local:8080/mcp"
+
+database:
+  storage:
+    size: "10Gi"
+    storageClass: "standard"
+
+ingress:
+  enabled: false
+  host: ""
+  className: "traefik"
+  annotations: {}
+  tlsSecretName: "ingress-tls"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi

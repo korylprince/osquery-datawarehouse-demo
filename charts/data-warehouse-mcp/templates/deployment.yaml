@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-warehouse-mcp
+  namespace: data-warehouse-mcp
+  labels:
+    app: data-warehouse-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: data-warehouse-mcp
+  template:
+    metadata:
+      labels:
+        app: data-warehouse-mcp
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      automountServiceAccountToken: false
+{{- if .Values.runtimeClassName }}
+      runtimeClassName: {{ .Values.runtimeClassName | quote }}
+{{- end }}
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: data-warehouse-mcp
+          image: {{ printf "%s/%s:%s" .Values.image.registry .Values.image.repository .Values.image.tag | quote }}
+          imagePullPolicy: Always
+          env:
+            - name: LISTEN_ADDR
+              value: ":8080"
+            - name: TRINO_HOST
+              value: {{ .Values.trinoHost | quote }}
+            - name: TRINO_PORT
+              value: {{ .Values.trinoPort | quote }}
+            - name: TRINO_SCHEME
+              value: {{ .Values.trinoScheme | quote }}
+            - name: TRINO_CATALOG
+              value: "iceberg"
+            - name: TRINO_SCHEMA
+              value: "default"
+            - name: TRINO_SOURCE
+              value: "data-warehouse-mcp"
+            - name: SESSION_TIMEOUT
+              value: "1h"
+            - name: SESSION_SWEEP_INTERVAL
+              value: "5m"
+            - name: MAX_SESSIONS
+              value: "10"
+            - name: MAX_INLINE_ROWS
+              value: "100"
+            - name: MAX_QUERY_FILE_BYTES
+              value: "104857600"
+            - name: MAX_BASH_OUTPUT_BYTES
+              value: "1048576"
+            - name: DEFAULT_BASH_TIMEOUT
+              value: "300s"
+            - name: MAX_BASH_TIMEOUT
+              value: "900s"
+            - name: DEFAULT_QUERY_TIMEOUT
+              value: "120s"
+            - name: MAX_QUERY_TIMEOUT
+              value: "900s"
+            - name: MAX_EDIT_BYTES
+              value: "1048576"
+            - name: MAX_IMAGE_BYTES
+              value: "10485760"
+            - name: SESSIONS_ROOT
+              value: "/sessions"
+            - name: SESSION_ROOTFS_ARCHIVE
+              value: "/opt/session-rootfs.tar"
+            - name: IMAGE_BASE_URL
+              value: {{ if .Values.imageBaseURL }}{{ .Values.imageBaseURL | quote }}{{ else if .Values.ingress.host }}{{ printf "https://%s" .Values.ingress.host | quote }}{{ else }}""{{ end }}
+            - name: IMAGES_ROOT
+              value: "/images"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - SYS_CHROOT
+          volumeMounts:
+            - name: sessions
+              mountPath: /sessions
+            - name: images
+              mountPath: /images
+            - name: tmp
+              mountPath: /tmp
+          resources:
+{{ toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: sessions
+          emptyDir: {}
+        - name: images
+          persistentVolumeClaim:
+            claimName: data-warehouse-mcp-images
+        - name: tmp
+          emptyDir: {}

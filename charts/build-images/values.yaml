@@ -1,0 +1,22 @@
+createNamespace: true
+imageRegistry: ""
+imageTag: "latest"
+gitURL: "https://github.com/korylprince/osquery-datawarehouse-demo.git"
+gitRevision: "HEAD"
+gitCredentialsSecretName: ""
+registrySecretName: "registry-credentials"
+insecureRegistry: false
+manifestCheckImage: "gcr.io/go-containerregistry/crane:debug"
+gitImage: "alpine/git"
+buildahImage: "quay.io/buildah/stable:v1"
+buildahStorageDriver: "overlay"
+
+images:
+  - name: data-warehouse-mcp
+    dockerfilePath: images/data-warehouse-mcp
+  - name: dwh-chat
+    dockerfilePath: images/dwh-chat
+  - name: flink-osquery-job
+    dockerfilePath: images/flink-osquery-job
+  - name: superset
+    dockerfilePath: images/superset

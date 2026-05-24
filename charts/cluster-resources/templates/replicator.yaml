@@ -1,0 +1,30 @@
+{{- if .Values.replicator.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: replicator
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-15"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: kubernetes-replicator
+    repoURL: https://helm.mittwald.de
+    targetRevision: {{ .Values.replicator.version | quote }}
+    helm:
+      valuesObject:
+        grantClusterAdmin: "true"
+        revisionHistoryLimit: 0
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: replicator
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}

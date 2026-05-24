@@ -1,0 +1,11 @@
+createNamespace: true
+adminTokenSecretName: "garage-admin-token"
+storage:
+  size: "10Gi"
+  capacityBytes: "10000000000"
+  storageClass: "standard"
+zone: "dc1"
+endpoint: "http://garage.garage.svc.cluster.local:3900"
+# Comma-separated list of namespaces to push garage-s3-credentials to via
+# kubernetes-replicator. Leave empty to disable replication.
+replicationNamespaces: ""

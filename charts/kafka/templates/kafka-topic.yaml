@@ -1,0 +1,12 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: osquery
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  partitions: {{ .Values.topic.partitions | default 1 }}
+  replicas: {{ .Values.topic.replicas | default 1 }}
+  config:
+    retention.ms: {{ .Values.topic.retentionMs | quote }}

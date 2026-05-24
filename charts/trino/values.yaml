@@ -1,0 +1,95 @@
+createNamespace: true
+trino:
+  server:
+    workers: 0
+  additionalConfigProperties:
+    - http-server.process-forwarded=true
+  accessControl:
+    type: configmap
+    refreshPeriod: 60s
+    configFile: "rules.json"
+    rules:
+      rules.json: |-
+        {
+          "catalogs": [
+            {"user": "data-warehouse-mcp", "catalog": "iceberg", "allow": "read-only"},
+            {"user": "data-warehouse-mcp", "catalog": "system", "allow": "read-only"},
+            {"user": "data-warehouse-mcp", "allow": "none"},
+            {"user": "superset", "catalog": "iceberg", "allow": "read-only"},
+            {"user": "superset", "catalog": "system", "allow": "read-only"},
+            {"user": "superset", "allow": "none"},
+            {"allow": "all"}
+          ],
+          "tables": [
+            {"user": "data-warehouse-mcp", "catalog": "iceberg", "schema": "default", "privileges": ["SELECT"]},
+            {"user": "data-warehouse-mcp", "catalog": "iceberg", "schema": "information_schema", "privileges": ["SELECT"]},
+            {"user": "data-warehouse-mcp", "catalog": "system", "schema": "metadata", "table": "table_comments", "privileges": ["SELECT"]},
+            {"user": "data-warehouse-mcp", "privileges": []},
+            {"user": "superset", "catalog": "iceberg", "privileges": ["SELECT"]},
+            {"user": "superset", "catalog": "system", "schema": "metadata", "privileges": ["SELECT"]},
+            {"user": "superset", "privileges": []},
+            {"privileges": ["SELECT", "INSERT", "DELETE", "UPDATE", "OWNERSHIP", "GRANT_SELECT"]}
+          ]
+        }
+  catalogs:
+    iceberg: |
+      connector.name=iceberg
+      iceberg.catalog.type=rest
+      iceberg.rest-catalog.uri=http://polaris.polaris.svc.cluster.local:8181/api/catalog
+      iceberg.rest-catalog.warehouse=warehouse
+      iceberg.rest-catalog.security=OAUTH2
+      iceberg.rest-catalog.oauth2.credential=root:${ENV:POLARIS_CLIENT_SECRET}
+      iceberg.rest-catalog.oauth2.scope=PRINCIPAL_ROLE:ALL
+      iceberg.rest-catalog.vended-credentials-enabled=false
+      fs.native-s3.enabled=true
+      s3.endpoint=http://garage.garage.svc.cluster.local:3900
+      s3.path-style-access=true
+      s3.region=garage
+      s3.signer-type=Aws4UnsignedPayloadSigner
+      s3.aws-access-key=${ENV:S3_ACCESS_KEY}
+      s3.aws-secret-key=${ENV:S3_SECRET_KEY}
+      iceberg.expire-snapshots.min-retention=1d
+      iceberg.remove-orphan-files.min-retention=1d
+  env:
+    - name: S3_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: "garage-s3-credentials"
+          key: AWS_ACCESS_KEY_ID
+    - name: S3_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: "garage-s3-credentials"
+          key: AWS_SECRET_ACCESS_KEY
+    - name: POLARIS_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: "polaris-root-credentials"
+          key: client-secret
+    - name: AWS_REQUEST_CHECKSUM_CALCULATION
+      value: WHEN_REQUIRED
+  coordinator:
+    config:
+      nodeScheduler:
+        includeCoordinator: true
+    jvm:
+      maxHeapSize: "2G"
+    resources:
+      requests:
+        cpu: 100m
+        memory: 2Gi
+      limits:
+        cpu: "2"
+        memory: 4Gi
+
+s3CredentialsSecretName: "garage-s3-credentials"
+polarisCredentialsSecretName: "polaris-root-credentials"
+polarisEndpoint: "http://polaris.polaris.svc.cluster.local:8181"
+garageEndpoint: "http://garage.garage.svc.cluster.local:3900"
+
+ingress:
+  enabled: false
+  host: ""
+  className: "traefik"
+  annotations: {}
+  tlsSecretName: "ingress-tls"

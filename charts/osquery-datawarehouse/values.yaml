@@ -1,0 +1,133 @@
+global:
+  imageRegistry: ""  # required: container registry prefix, e.g. ghcr.io/yourorg
+  imageTag: "latest"
+  storageClass: "standard"
+
+argocd:
+  namespace: "argocd"
+  repoURL: "https://github.com/korylprince/osquery-datawarehouse-demo.git"
+  targetRevision: "HEAD"
+
+ingress:
+  enabled: false
+  className: "traefik"
+  annotations: {}
+  tlsSecretName: "ingress-tls"
+
+basicAuth:
+  middlewareNamespace: ""
+  middlewareName: ""
+
+buildImages:
+  enabled: true
+  imageRegistry: ""  # defaults to global.imageRegistry when empty
+  imageTag: ""       # defaults to global.imageTag when empty
+  gitURL: "https://github.com/korylprince/osquery-datawarehouse-demo.git"
+  gitRevision: "HEAD"
+  gitCredentialsSecretName: ""
+  registrySecretName: "registry-credentials"
+  insecureRegistry: false
+  manifestCheckImage: "gcr.io/go-containerregistry/crane:debug"
+  gitImage: "alpine/git"
+  buildahImage: "quay.io/buildah/stable:v1"
+  buildahStorageDriver: "overlay"
+
+garage:
+  adminTokenSecretName: "garage-admin-token"
+  storage:
+    size: "10Gi"
+    storageClass: ""
+  zone: "dc1"
+  endpoint: "http://garage.garage.svc.cluster.local:3900"
+  # Namespaces to push garage-s3-credentials to (requires kubernetes-replicator)
+  replicationNamespaces: ""
+  ingress:
+    host: ""
+
+kafka:
+  storage:
+    size: "100Gi"
+    storageClass: ""
+  external:
+    enabled: false
+    host: ""
+    tlsSecretName: "ingress-tls-pkcs8"
+  ingress:
+    host: ""
+
+polaris:
+  tokenKeySecretName: "token-key"
+  rootCredentialsSecretName: "polaris-root-credentials"
+  databaseSecretName: "polaris-database-app"
+  s3CredentialsSecretName: "garage-s3-credentials"
+  storage:
+    size: "20Gi"
+    storageClass: ""
+  garageEndpoint: "http://garage.garage.svc.cluster.local:3900"
+  polarisHost: "http://polaris.polaris.svc.cluster.local:8181"
+  ingress:
+    host: ""
+
+trino:
+  s3CredentialsSecretName: "garage-s3-credentials"
+  polarisCredentialsSecretName: "polaris-root-credentials"
+  workers: 0
+  coordinator:
+    maxHeapSize: "2G"
+  ingress:
+    host: ""
+
+flink:
+  s3CredentialsSecretName: "garage-s3-credentials"
+  polarisCredentialsSecretName: "polaris-root-credentials"
+  polarisURI: "http://polaris.polaris.svc.cluster.local:8181/api/catalog"
+  garageEndpoint: "http://garage.garage.svc.cluster.local:3900"
+  kafkaBootstrap: "kafka-kafka-bootstrap.kafka.svc.cluster.local:9092"
+  trinoEndpoint: "trino.trino.svc.cluster.local:8080"
+  jobManager:
+    cpu: 0.5
+    cpuLimitFactor: 2.0
+    memory: "1024m"
+    memoryLimitFactor: 2.0
+  taskManager:
+    cpu: 0.5
+    cpuLimitFactor: 2.0
+    memory: "2048m"
+    memoryLimitFactor: 2.0
+  ingress:
+    host: ""
+
+dataWarehouseMcp:
+  runtimeClassName: ""
+  trinoHost: "trino.trino.svc.cluster.local"
+  trinoPort: "8080"
+  storage:
+    size: "10Gi"
+    storageClass: ""
+  ingress:
+    host: ""
+
+superset:
+  ingress:
+    host: ""
+
+dwhChat:
+  endpoints:
+    - name: "Local"
+      baseUrl: "http://model-router.model-api-operator.svc.cluster.local:8080"
+      models:
+        - "my-model"
+  # apiKeySecrets mounts secret keys as files for endpoints that use apiKeyFile:
+  # - secretName: my-openai-key
+  #   key: api-key
+  #   mountPath: /secrets/openai-api-key
+  apiKeySecrets: []
+  authSecretName: "dwh-chat-auth"
+  databaseSecretName: "dwh-chat-db"
+  mcpURL: "http://data-warehouse-mcp.data-warehouse-mcp.svc.cluster.local:8080/mcp"
+  database:
+    storage:
+      size: "10Gi"
+      storageClass: ""
+  ingress:
+    host: ""

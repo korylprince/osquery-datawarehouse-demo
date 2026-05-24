@@ -1,0 +1,73 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: leader-lock-cleanup
+  namespace: password-generator
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: leader-lock-cleanup
+  namespace: password-generator
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["kubernetes-secret-generator-lock"]
+    verbs: ["delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: leader-lock-cleanup
+  namespace: password-generator
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: leader-lock-cleanup
+subjects:
+  - kind: ServiceAccount
+    name: leader-lock-cleanup
+    namespace: password-generator
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: leader-lock-cleanup
+  namespace: password-generator
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  ttlSecondsAfterFinished: 60
+  template:
+    spec:
+      serviceAccountName: leader-lock-cleanup
+      restartPolicy: Never
+      containers:
+        - name: cleanup
+          image: bitnami/kubectl:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Cleaning up completed pods and stale leader lock..."
+              kubectl delete pods -n password-generator --field-selector=status.phase==Succeeded --ignore-not-found
+              kubectl delete pods -n password-generator --field-selector=status.phase==Failed --ignore-not-found
+              kubectl delete configmap kubernetes-secret-generator-lock -n password-generator --ignore-not-found
+              echo "Cleanup complete"

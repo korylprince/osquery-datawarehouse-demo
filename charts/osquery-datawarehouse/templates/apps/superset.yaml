@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: superset
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    path: charts/superset
+    repoURL: {{ .Values.argocd.repoURL | quote }}
+    targetRevision: {{ .Values.argocd.targetRevision | quote }}
+    helm:
+      values: |
+        createNamespace: false
+        superset:
+          image:
+            repository: {{ required "global.imageRegistry is required (e.g. ghcr.io/yourorg)" .Values.global.imageRegistry }}/superset
+            tag: {{ .Values.global.imageTag | quote }}
+{{- $supersetExtraAnnotations := dict -}}
+{{- if .Values.basicAuth.middlewareName -}}
+{{- $_ := set $supersetExtraAnnotations "traefik.ingress.kubernetes.io/router.middlewares" (printf "%s-%s@kubernetescrd" .Values.basicAuth.middlewareNamespace .Values.basicAuth.middlewareName) -}}
+{{- end -}}
+{{ include "osquery-datawarehouse.ingressValues" (dict "root" . "host" .Values.superset.ingress.host "extraAnnotations" $supersetExtraAnnotations) | nindent 8 }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: superset
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
