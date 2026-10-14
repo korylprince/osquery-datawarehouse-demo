@@ -5,7 +5,7 @@ This repo is a companion to the talk I gave at [MDOYVR](https://mdoyvr.com/) 202
 - [Talk Recording](https://www.youtube.com/watch?v=-6MX4qGK7gc)
 - [Slide Deck](https://docs.google.com/presentation/d/13Li7k0-EJba--i1Zu_HoWln-FMSQKGUjOIE-yMtgrSE)
 
-I gave a modified version of this talk at the SF Apple Admin User Group - October 2026 Meetup.
+I gave a updated version of this talk at the SF Apple Admin User Group - October 2026 Meetup.
 
 - [Slide Deck](https://docs.google.com/presentation/d/1ybSWQ4V-CHjUGUBncZO3x0hMePjOGi6ha3iegHiVJQ4)
 
