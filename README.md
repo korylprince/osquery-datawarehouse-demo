@@ -169,6 +169,8 @@ The script generates ~5.5M events. On the default `m8a.xlarge` instance, Flink c
 
 The Flink job exports per-table and job-level metrics to Prometheus, which Grafana visualizes.
 
+Import [docs/grafana_dashboard.json](docs/grafana_dashboard.json) into Grafana for a dashboard with the graphs shown below.
+
 1. Open Grafana at `https://grafana.<DOMAIN>/explore`
 2. Click the `Code` tab to enter PromQL queries
 3. Run the queries below to inspect ingestion health:
